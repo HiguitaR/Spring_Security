@@ -402,3 +402,4 @@ vulnerabilidades desde el principio.
 - A veces, los errores más pequeños pueden causar daños significativos. Por ejemplo, exponer datos 
 sensibles a través de registros o mensajes de error es una forma común de introducir vulnerabilidades
 en tu aplicación. 
+
