@@ -268,3 +268,482 @@ autenticación utiliza en la lógica de autenticación.
 El contexto de seguridad conservará los datos hasta que finalice la acción. Por lo general, en una 
 aplicación con un hilo por solicitud, esto significa hasta que la aplicación envíe la respuesta al 
 cliente.
+
+En los siguientes párrafos, analizaré estos beans configurados automáticamente:
+
+- `UserDetailsService`
+- `PasswordEncoder`
+
+Un objeto que implementa la interfaz `UserDetailsService` con Spring Security gestiona los detalles 
+sobre los usuarios. Hasta ahora, hemos utilizado la implementación predeterminada proporcionada por 
+Spring Boot. Esta implementación solo registra las credenciales predeterminadas en la memoria interna
+de la aplicación. Estas credenciales predeterminadas son "user" con una contraseña predeterminada 
+que es un identificador único universal (UUID). La contraseña predeterminada se genera aleatoriamente
+cuando se carga el contexto de Spring (al iniciar la aplicación). En ese momento, la aplicación 
+escribe la contraseña en la consola, donde puedes verla. Así, puedes usarla en el ejemplo en el que 
+acabamos de trabajar en este capítulo.
+
+Esta implementación predeterminada sirve únicamente como prueba de concepto y nos permite verificar 
+que la dependencia está correctamente configurada. La implementación almacena las credenciales en 
+memoria: la aplicación no persiste las credenciales. Este enfoque es adecuado para ejemplos o pruebas
+de concepto, pero debes evitarlo en una aplicación lista para producción.
+
+Luego tenemos el `PasswordEncoder`. El PasswordEncoder realiza dos funciones:
+
+- Codifica una contraseña (normalmente utilizando un algoritmo de cifrado o hash)
+- Verifica si la contraseña coincide con una codificación existente
+
+Aunque no sea tan evidente como el objeto UserDetailsService, el `PasswordEncoder` es obligatorio para
+el flujo de autenticación básica. La implementación más simple gestiona las contraseñas en texto 
+plano y no las codifica. Discutiremos con más detalle la implementación de este objeto en el capítulo 4. Por ahora, debes saber que existe un PasswordEncoder junto con el UserDetailsService predeterminado. Cuando reemplazamos la implementación predeterminada del UserDetailsService, también debemos especificar un PasswordEncoder.
+
+Spring Boot también elige un método de autenticación al configurar los valores predeterminados: la 
+autenticación HTTP Basic. Es el método de autenticación de acceso más sencillo. La autenticación 
+básica solo requiere que el cliente envíe un nombre de usuario y una contraseña a través del 
+encabezado HTTP Authorization. En el valor del encabezado, el cliente añade el prefijo Basic, seguido 
+de la codificación en Base64 de la cadena que contiene el nombre de usuario y la contraseña, 
+separados por dos puntos (:). 
+
+`NOTA:` La autenticación HTTP Basic no ofrece confidencialidad de las credenciales. Base64 es solo 
+un método de codificación para facilitar la transferencia; no es un método de cifrado ni de hash. 
+Durante la transmisión, si se intercepta, cualquiera puede ver las credenciales. En general, no se 
+utiliza la autenticación HTTP Basic sin al menos HTTPS para garantizar la confidencialidad. Puedes 
+leer la definición detallada de HTTP Basic en RFC 7617 (https://tools.ietf.org/html/rfc7617).
+
+El `AuthenticationProvider` define la lógica de autenticación, delegando la gestión del usuario y la
+contraseña. Una implementación predeterminada de `AuthenticationProvider` utiliza las implementaciones
+predeterminadas proporcionadas para `UserDetailsService` y `PasswordEncoder`. Implícitamente, tu 
+aplicación protege todos los endpoints. Por lo tanto, lo único que necesitamos hacer para nuestro 
+ejemplo es agregar el endpoint. Además, solo hay un usuario que puede acceder a todos los `endpoints,`
+por lo que en este caso se puede decir que no hay mucho que hacer respecto a la autorización.
+
+`HTTP vs. HTTPS`
+
+Puede que hayas observado que en los ejemplos presentados, solo uso HTTP. En la práctica, sin 
+embargo, tus aplicaciones se comunican únicamente mediante HTTPS. Para los ejemplos que discutimos 
+en este libro, las configuraciones relacionadas con Spring Security no son diferentes, ya sea que 
+usemos HTTP o HTTPS. No configuraremos HTTPS para los endpoints en los ejemplos para que puedas 
+concentrarte en los ejemplos relacionados con Spring Security. Pero si lo deseas, puedes habilitar 
+HTTPS para cualquiera de los endpoints, como se presenta en este recuadro.
+
+Existen varios patrones para configurar HTTPS en un sistema. En algunos casos, los desarrolladores 
+configuran HTTPS a nivel de aplicación; en otros, podrían usar una malla de servicios, o podrían 
+optar por establecer HTTPS a nivel de infraestructura. Con Spring Boot, puedes habilitar fácilmente 
+HTTPS a nivel de aplicación, como aprenderás en el siguiente ejemplo de este recuadro.
+
+En cualquiera de estos escenarios de configuración, necesitas un certificado firmado por una 
+autoridad de certificación (CA). Usando este certificado, el cliente que llama al endpoint sabe si 
+la respuesta proviene del servidor de autenticación y que nadie interceptó la comunicación. Puedes 
+comprar dicho certificado si lo necesitas. Si solo necesitas configurar HTTPS para probar tu 
+aplicación, puedes generar un certificado autofirmado usando una herramienta como `OpenSSL`
+(https://www.openssl.org/). Generemos nuestro certificado autofirmado y luego configurémoslo en el 
+proyecto:
+`openssl req -newkey rsa:2048 -x509 -keyout key.pem -out cert.pem -days 365`
+
+Después de ejecutar el comando openssl en una terminal, se te pedirá una contraseña y detalles sobre 
+tu CA. Dado que se trata únicamente de un certificado autofirmado para pruebas, puedes ingresar 
+cualquier dato; solo asegúrate de recordar la contraseña. El comando genera dos archivos: key.pem 
+(la clave privada) y cert.pem (un certificado público). Utilizaremos estos archivos más adelante 
+para generar nuestro certificado autofirmado y habilitar HTTPS. En la mayoría de los casos, el 
+certificado sigue el estándar de criptografía de clave pública #12 (PKCS12). Con menos frecuencia, 
+se utiliza el formato Java KeyStore (JKS). Continuemos nuestro ejemplo con el formato PKCS12 (para 
+una excelente explicación sobre criptografía, recomiendo Real-World Cryptography de David Wong 
+[Manning, 2020]):
+`openssl pkcs12 -export -in cert.pem -inkey key.pem -out certificate.p12
+-name "certificate"`
+
+El segundo comando que utilizamos recibe como entrada los dos archivos generados por el primer 
+comando y produce como salida el certificado autofirmado.
+
+Ten en cuenta que si ejecutas estos comandos en un shell Bash en un sistema Windows, es posible que 
+necesites agregar winpty antes del comando:
+
+`winpty openssl req -newkey rsa:2048 -x509 -keyout key.pem -out cert.pem
+-days 365`
+
+`winpty openssl pkcs12 -export -in cert.pem -inkey key.pem -out
+certificate.p12 -name "certificate"`
+
+Finalmente, con el certificado autofirmado, puedes configurar HTTPS para tus endpoints. Copia el 
+archivo certificate.p12 en la carpeta resources del proyecto Spring Boot y agrega las siguientes 
+líneas al archivo application.properties:
+
+`server.ssl.key-store-type=PKCS12`
+
+`server.ssl.key-store=classpath:certificate.p12`
+
+`server.ssl.key-store-password=12345`
+
+`El valor de la contraseña es el que especificaste al ejecutar el segundo comando para generar el 
+archivo del certificado PKCS12.`
+
+La contraseña (en mi caso, 12345) fue solicitada en el mensaje que apareció después de ejecutar el 
+comando para generar el certificado. Por eso no la ves incluida en el comando. Ahora agreguemos un 
+endpoint de prueba a nuestra aplicación y luego llamémoslo usando HTTPS:
+
+```java
+@RestController
+public class HelloController {
+    @GetMapping("/hello")
+    public String hello() {
+        return "Hello!";
+    }
+}
+```
+
+Si usas un certificado autofirmado, debes configurar la herramienta que utilizas para realizar la 
+llamada al endpoint de forma que omita la verificación de autenticidad del certificado. Si la 
+herramienta verifica la autenticidad del certificado, no lo reconocerá como válido y la llamada no 
+funcionará. Con cURL, puedes usar la opción -k para omitir la verificación del certificado:
+
+`curl -k -u user:93a01cf0-794b-4b98-86ef-54860f36f7f3 https://localhost:8080/hello`
+
+La respuesta a la llamada es
+¡Hola!
+
+Recuerda que, aunque uses HTTPS, la comunicación entre los componentes de tu sistema no es 
+completamente infalible. En muchas ocasiones, he escuchado a personas decir: "Ya no cifro esto, 
+¡usaré HTTPS!". Aunque es útil para proteger la comunicación, HTTPS es solo uno de los componentes 
+de la seguridad de un sistema. Siempre trata la seguridad de tu sistema con responsabilidad y cuida 
+todas las capas involucradas.
+
+### 2.3 Sobrescribir configuraciones predeterminadas
+
+Ahora que conoces las configuraciones predeterminadas de tu primer proyecto, es momento de ver cómo
+puedes reemplazarlas. Debes entender las opciones disponibles para sobrescribir los componentes 
+predeterminados, ya que así podrás integrar tus propias implementaciones y aplicar la seguridad de 
+acuerdo con las necesidades de tu aplicación. Como aprenderás en esta sección, el proceso de 
+desarrollo también implica escribir configuraciones que mantengan tus aplicaciones altamente 
+mantenibles. En los proyectos que trabajaremos, a menudo encontrarás múltiples formas de sobrescribir
+una configuración, lo que puede generar confusión. Es común ver mezclas de diferentes estilos para 
+configurar distintas partes de Spring Security en una misma aplicación, lo cual no es recomendable. 
+Por ello, esta flexibilidad requiere precaución. Necesitas aprender a elegir entre las opciones, por
+lo que esta sección también se enfoca en conocer qué alternativas tienes.
+
+En algunos casos, los desarrolladores optan por usar beans en el contexto de Spring para la 
+configuración; en otros, sobrescriben diversos métodos con el mismo propósito. La rapidez con la que
+ha evolucionado el ecosistema Spring es probablemente uno de los factores principales que generó 
+estos múltiples enfoques. Combinar estilos de configuración no es deseable, ya que dificulta la 
+comprensión del código y afecta la mantenibilidad de la aplicación. Conocer tus opciones y cómo 
+usarlas es una habilidad valiosa que te ayudará a entender mejor cómo configurar la seguridad a nivel
+de aplicación.
+
+En esta sección, aprenderás a configurar un `UserDetailsService` y un `PasswordEncoder`. Estos dos 
+componentes suelen participar en la autenticación, y la mayoría de las aplicaciones los personalizan
+según sus requisitos. Aunque discutiremos los detalles sobre su personalización en los capítulos 3 y
+4, es esencial saber cómo integrar una implementación personalizada. Las implementaciones que usamos
+en este capítulo son todas proporcionadas por Spring Security.
+
+#### 2.3.1 Personalización de la gestión de detalles de usuario
+
+El primer componente del que hablamos en este capítulo fue UserDetailsService. Como viste, la 
+aplicación utiliza este componente en el proceso de autenticación. En esta sección, aprenderás a 
+definir un bean personalizado de tipo UserDetailsService para sobrescribir el que Spring Boot 
+configura por defecto. Como verás en detalle en el capítulo 3, puedes crear tu propia implementación
+o usar una predefinida proporcionada por Spring Security. En este capítulo, no profundizaremos aún 
+en las implementaciones de Spring Security ni crearemos una propia. Usaré una implementación 
+proporcionada por Spring Security llamada `InMemoryUserDetailsManager`. Con este ejemplo, aprenderás 
+cómo integrar este tipo de objeto en tu arquitectura.
+
+`NOTA` Las interfaces en Java definen contratos entre objetos. En el diseño de clases de la aplicación, 
+usamos interfaces para desacoplar objetos que se utilizan entre sí. Para reforzar esta característica 
+de interfaz al tratar sobre ellas en este libro, me refiero principalmente a ellas como contratos.
+
+Para mostrarte cómo sobrescribir este componente con una implementación que elegimos, cambiaremos lo
+que hicimos en el primer ejemplo. Esto nos permitirá tener nuestras propias credenciales gestionadas
+para la autenticación. En este ejemplo, no implementaremos nuestra propia clase, sino que usaremos 
+una implementación proporcionada por Spring Security.
+
+En este ejemplo, utilizamos la implementación InMemoryUserDetailsManager. Aunque ofrece más 
+funcionalidades que un simple `UserDetailsService`, por ahora solo la trataremos desde la perspectiva 
+de un `UserDetailsService`. Esta implementación almacena las credenciales en memoria, las cuales 
+pueden ser utilizadas posteriormente por Spring Security para autenticar una solicitud.
+
+`NOTA:` Una implementación de InMemoryUserDetailsManager no está pensada para aplicaciones listas 
+para producción, pero es una excelente herramienta para ejemplos o pruebas de concepto. En algunos 
+casos, todo lo que necesitas son usuarios; no es necesario invertir tiempo en implementar esta parte
+de la funcionalidad. En nuestro caso, la usamos para entender cómo sobrescribir la implementación 
+predeterminada de `UserDetailsService.`
+
+Comenzamos definiendo una clase de configuración. Generalmente, declaramos las clases de 
+configuración en un paquete separado llamado config. La siguiente lista muestra la definición de la 
+clase de configuración. También puedes encontrar el ejemplo en el proyecto ssia-ch2-ex2.
+
+```java
+@Configuration  //The @Configuration annotation marks the class as a configuration class.
+public class ProjectConfig { 
+    @Bean  //The @Bean annotation instructs Spring to add the returned value as a bean in the Spring context.
+    UserDetailsService userDetailsService() {
+        return new InMemoryUserDetailsManager();
+    }    
+}
+```
+
+Anotamos la clase con `@Configuration`. La anotación `@Bean` indica a Spring que agregue la 
+instancia devuelta por el método al contexto de Spring. Si ejecutas el código exactamente como está 
+ahora, ya no verás la contraseña generada automáticamente en la consola. La aplicación ahora utiliza
+la instancia de tipo `UserDetailsService` que agregaste al contexto, en lugar de la implementación 
+predeterminada configurada automáticamente. Pero al mismo tiempo, ya no podrás acceder al endpoint 
+por dos razones:
+- No tienes ningún usuario.
+- No tienes un `PasswordEncoder`.
+
+Viste que la autenticación también depende de un `PasswordEncoder`. Resolvamos estos dos problemas 
+paso a paso. Necesitamos:
+
+1. Crear al menos un usuario con un conjunto de credenciales (nombre de usuario y contraseña).
+2. Agregar el usuario para que sea gestionado por nuestra implementación de UserDetailsService.
+3. Definir un bean de tipo PasswordEncoder que la aplicación pueda usar para verificar una 
+contraseña dada con la almacenada y gestionada por UserDetailsService.
+
+Primero, declaramos y agregamos un conjunto de credenciales que podamos usar para autenticación a la
+instancia de `InMemoryUserDetailsManager`. En el capítulo 3 discutiremos más sobre los usuarios y 
+cómo gestionarlos. Por ahora, usemos un constructor predefinido para crear un objeto de tipo 
+`UserDetails`.
+
+`NOTA:` A veces verás que uso var en el código. Java 10 introdujo el nombre de tipo reservado var, 
+que solo se puede usar para declaraciones locales. Aunque en algunos casos el uso de var en este 
+libro podría considerarse un mal enfoque desde la perspectiva de una codificación limpia, se hace 
+para acortar la sintaxis y ocultar el tipo de variable. Este enfoque te ayuda a centrarte en lo 
+relevante para el ejemplo dado. Discutiremos los tipos ocultos por var en capítulos posteriores, por
+lo que no debes preocuparte por ellos hasta que sea el momento de analizarlos adecuadamente.
+
+Al construir la instancia, debemos proporcionar el nombre de usuario, la contraseña y al menos una 
+autoridad. La autoridad es una acción permitida para ese usuario, y podemos usar cualquier cadena 
+para esto. En el siguiente ejemplo, he llamado a la autoridad "read", pero como no usaremos esta 
+autoridad por ahora, el nombre no importa realmente.
+
+Crear un usuario con la clase User builder para `UserDetailsService`
+```java
+@Configuration
+public class ProjectConfig {
+    @Bean
+    UserDetailsService userDetailsService() {//Construye el usuario con un nombre de usuario, contraseña y lista de autoridades especificados.
+        var user = User.withUsername("john")
+                .password("12345")
+                .authorities("read")
+                .build();
+        return new InMemoryUserDetailsManager(user);//Agrega el usuario para que sea gestionado por UserDetailsService
+    }
+}    
+```
+`NOTA:` Encontrarás la clase User en el paquete org.springframework.security.core.userdetails. Es la
+implementación del constructor que usamos para crear el objeto que representa al usuario. Además, 
+como regla general en este libro, si no se muestra cómo escribir una clase en un fragmento de código,
+significa que Spring Security la proporciona.
+
+Como se presenta en el listado 2.4, debemos proporcionar un valor para el nombre de usuario, uno para
+la contraseña y al menos una autoridad. Sin embargo, aún no es suficiente para permitirnos llamar al
+endpoint. También necesitamos declarar un `PasswordEncoder`.
+
+Cuando se usa el UserDetailsService predeterminado, un `PasswordEncoder` también se configura 
+automáticamente. Dado que hemos reemplazado UserDetailsService, también debemos declarar un 
+`PasswordEncoder`. Si se prueba el ejemplo ahora, se verá una excepción al llamar al endpoint. Al 
+intentar realizar la autenticación, Spring Security detecta que no sabe cómo gestionar la contraseña
+y falla. La excepción será similar a la del siguiente fragmento de código, y deberías verla en la 
+consola de tu aplicación. El cliente recibirá un mensaje `HTTP 401 Unauthorized` y un cuerpo de 
+respuesta vacío:
+curl -u john:12345 http://localhost:8080/hello
+
+El resultado por consola de la peticion es:
+
+java.lang.IllegalArgumentException:
+
+There is no PasswordEncoder mapped for the id "null"
+    at
+
+org.springframework.security.crypto.
+
+➥password.DelegatingPasswordEncoder$
+
+➥UnmappedIdPasswordEncoder.matches(
+
+➥DelegatingPasswordEncoder.java:289)
+
+➥~[spring-security-crypto-6.0.0.jar:6.0.0]
+
+at org.springframework.security.crypto.
+
+➥password.DelegatingPasswordEncoder.matches(
+
+➥DelegatingPasswordEncoder.java:237)
+
+➥~[spring-security-crypto-6.0.0.jar:6.0.0]
+
+Para solucionar este problema, podemos agregar un bean de PasswordEncoder en el contexto, tal como 
+hicimos con el UserDetailsService. Para este bean, usamos una implementación existente de 
+`PasswordEncoder`:
+
+```java
+@Bean
+public PasswordEncoder passwordEncoder() {
+    return NoOpPasswordEncoder.getInstance();
+}
+```
+`NOTA:` La instancia de `NoOpPasswordEncoder` trata las contraseñas como texto plano. No las cifra ni 
+aplica hash. Para verificarlas, `NoOpPasswordEncoder` solo compara las cadenas utilizando el método 
+equals(Object o) de la clase String. No deberías usar este tipo de `PasswordEncoder` en una aplicación
+lista para producción. `NoOpPasswordEncoder` es una buena opción para ejemplos en los que no deseas 
+enfocarte en el algoritmo de hash de la contraseña. Por ello, los desarrolladores de la clase la han
+marcado como `@Deprecated`, y tu entorno de desarrollo mostrará su nombre tachado.
+
+Puedes ver el código completo de la clase de configuración en el siguiente listado.
+
+La definición completa de la clase de configuración:
+```java
+@Configuration
+public class ProjectConfig {
+    @Bean
+    UserDetailsService userDetailsService() {
+        var user = User.withUsername("john")
+                .password("12345")
+                .authorities("read")
+                .build();
+        return new InMemoryUserDetailsManager(user);
+    }
+
+    @Bean  //A new method annotated with @Bean to add a PasswordEncoder to the context
+    PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
+    }
+}    
+```
+
+Probemos el endpoint con el nuevo usuario que tiene el nombre de usuario john y la contraseña 12345:
+
+curl -u john:12345 http://localhost:8080/hello
+Hello!
+
+`NOTA:` Sabiendo la importancia de las pruebas unitarias e integrales, algunos de ustedes podrían 
+preguntarse por qué no escribimos pruebas para nuestros ejemplos. En realidad, encontrarás las 
+pruebas de integración relacionadas con Spring Security en todos los ejemplos proporcionados en este
+libro. Sin embargo, para ayudarte a centrarte en los temas presentados en cada capítulo, he separado
+la discusión sobre las pruebas de integración de Spring Security y la detallo en el capítulo 18.
+
+### 2.3.2 Aplicar autorización a nivel de endpoint
+
+Con una nueva gestión de usuarios implementada, como se describió en la sección 2.3.1, ahora podemos
+discutir el método de autenticación y la configuración de los endpoints. Aprenderás mucho sobre la 
+configuración de autorización en los capítulos 7 a 12. Pero antes de profundizar, debes entender la 
+visión general. La mejor forma de lograrlo es con nuestro primer ejemplo. Con la configuración 
+predeterminada, todos los endpoints asumen que tienes un usuario válido gestionado por la aplicación.
+Además, por defecto, tu aplicación usa autenticación HTTP Basic, aunque esta configuración se puede 
+sobrescribir fácilmente.
+
+Como aprenderás en los próximos capítulos, la autenticación HTTP Basic no se ajusta a la mayoría de 
+las arquitecturas de aplicaciones. A veces, nos interesa cambiarla para adaptarla a nuestra 
+aplicación. De forma similar, no todos los endpoints necesitan estar protegidos, y para aquellos que
+sí, podríamos necesitar diferentes métodos de autenticación y reglas de autorización. Para 
+personalizar la gestión de autenticación y autorización, necesitaremos definir un bean de tipo 
+SecurityFilterChain. Para este ejemplo, continuaré escribiendo el código en el proyecto ssia-ch2-ex3.
+
+Definir un @Bean SecurityFilterChain:
+```java
+@Configuration
+public class ProjectConfig {
+    @Bean
+    SecurityFilterChain configure(HttpSecurity http)
+        throws Exception {
+        return http.build();
+    }
+    // Omitted code
+}
+```
+Podemos entonces alterar la configuración utilizando diferentes métodos del objeto HttpSecurity, 
+como se muestra en el siguiente listado.
+
+Usar el parámetro HttpSecurity para modificar la configuración:
+```java
+@Configuration
+public class ProjectConfig {
+    @Bean
+    SecurityFilterChain configure(HttpSecurity http)
+            throws Exception {
+        http.httpBasic(Customizer.withDefaults());//App uses HTTP Basic authentication.
+        
+        http.authorizeHttpRequests(
+                c -> c.anyRequest().authenticated()//All the requests require authentication.
+        );
+        return http.build();
+    }
+    //Omitted code
+}
+```
+El código configura la autorización de endpoints con el mismo comportamiento que la predeterminada. 
+Puedes volver a llamar al endpoint para verificar si se comporta igual que en la prueba anterior de 
+la sección 2.3.1. Con un pequeño cambio, puedes hacer que todos los endpoints sean accesibles sin 
+necesidad de credenciales. Verás cómo hacerlo en el siguiente listado.
+
+Usar permitAll() para cambiar la configuración de autorización:
+```java
+@Configuration
+public class ProjectConfig {
+    @Bean
+    public SecurityFilterChain configure(HttpSecurity http)
+            throws Exception {
+        http.httpBasic(Customizer.withDefaults());
+        http.authorizeHttpRequests(
+                c -> c.anyRequest().permitAll()
+        );
+        return http.build();
+    }
+    //Omitted code
+}
+```
+Ahora podemos llamar al endpoint /hello sin necesidad de credenciales. La llamada a permitAll() en 
+la configuración, junto con el método anyRequest(), permite el acceso a todos los endpoints sin 
+necesidad de autenticación.
+
+curl http://localhost:8080/hello
+
+El cuerpo de la respuesta de la llamada es
+Hello!
+
+En este ejemplo, utilizamos dos métodos de configuración:
+
+- httpBasic(), que nos ayudó a configurar el enfoque de autenticación. Al llamar a este método, 
+indicamos a nuestra aplicación que acepte HTTP Basic como método de autenticación.
+- authorizeHttpRequests(), que nos ayudó a configurar las reglas de autorización a nivel de endpoint.
+Al llamar a este método, indicamos a la aplicación cómo autorizar las solicitudes recibidas en 
+endpoints específicos.
+
+Para ambos métodos, tuvimos que usar un objeto `Customizer` como parámetro. `Customizer` es un contrato 
+que implementamos para definir la personalización de los elementos de Spring Security que 
+configuramos: la autenticación, la autorización o mecanismos de protección específicos como CSRF o 
+CORS (que se discutirán en los capítulos 9 y 10). El siguiente fragmento muestra la definición de la 
+interfaz `Customizer`. Observa que Customizer es una interfaz funcional (por lo tanto, podemos usar 
+expresiones lambda para implementarla), y el método `withDefaults()` que usé en el listado 2.8 es, de 
+hecho, solo una implementación de Customizer que no realiza ninguna modificación:
+
+```java
+@FunctionalInterface
+public interface Customizer<T> {
+    void customize(T t);
+    static <T> Customizer<T> withDefaults() {
+        return (t) -> {
+        };
+    }
+}
+```
+
+En versiones anteriores de Spring Security, era posible aplicar configuraciones sin usar un objeto 
+`Customizer`, mediante una sintaxis encadenada, como se muestra en el siguiente fragmento de código. 
+Observa que, en lugar de proporcionar un objeto Customizer al método `authorizeHttpRequests()`, la 
+configuración simplemente continúa después de la llamada al método:
+```java
+http.authorizeHttpRequests()
+    .anyRequest().authenticated()
+```
+La razón por la que este enfoque ha quedado obsoleto es porque un objeto Customizer ofrece mayor 
+flexibilidad para mover la configuración donde sea necesario. Aunque con ejemplos sencillos el uso 
+de expresiones lambda resulta cómodo, en aplicaciones reales las configuraciones pueden crecer 
+considerablemente. En tales casos, la posibilidad de trasladar estas configuraciones a clases 
+separadas ayuda a mantenerlas más organizadas, fáciles de mantener y de probar.
+
+El propósito de este ejemplo es darte una idea de cómo sobrescribir configuraciones predeterminadas.
+Entraremos en más detalles sobre autorización en los capítulos 7 a 10.
+
+NOTA: En versiones anteriores de Spring Security, una clase de configuración de seguridad necesitaba
+extender una clase llamada `WebSecurityConfigurerAdapter`. `Ya no se utiliza esta práctica`. Si tu 
+aplicación usa una base de código más antigua, o necesitas actualizar una base de código antigua. 
+ 
