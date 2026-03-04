@@ -745,5 +745,304 @@ Entraremos en más detalles sobre autorización en los capítulos 7 a 10.
 
 NOTA: En versiones anteriores de Spring Security, una clase de configuración de seguridad necesitaba
 extender una clase llamada `WebSecurityConfigurerAdapter`. `Ya no se utiliza esta práctica`. Si tu 
-aplicación usa una base de código más antigua, o necesitas actualizar una base de código antigua. 
- 
+aplicación usa una base de código más antigua, o necesitas actualizar una base de código antigua, Te
+recomiendo que también leas la primera edición de Spring Security in Action.
+
+### 2.3.3 Configurando de diferentes maneras
+Uno de los aspectos confusos de crear configuraciones con Spring Security es tener múltiples formas 
+de configurar lo mismo. En esta sección, aprenderás alternativas para configurar `UserDetailsService` 
+y `PasswordEncoder`. Es esencial conocer las opciones disponibles para poder reconocerlas en los 
+ejemplos que encuentres en este libro u otras fuentes como blogs y artículos. También es importante 
+que entiendas cómo y cuándo usarlas en tu aplicación. Los capítulos siguientes presentan diferentes 
+ejemplos que amplían la información de esta sección.
+
+Tomemos el primer proyecto. Después de crear una aplicación por defecto, logramos sobrescribir 
+`UserDetailsService` y `PasswordEncoder` agregando nuevas implementaciones como beans en el contexto 
+de Spring. Ahora exploremos otra forma de realizar las mismas configuraciones para `UserDetailsService`
+y `PasswordEncoder`.
+
+Podemos usar directamente el bean `SecurityFilterChain` para establecer tanto el `UserDetailsService` 
+como el `PasswordEncoder`, como se muestra en el siguiente ejemplo. Puedes encontrar este caso en el 
+proyecto ssia-ch2-ex3.
+
+Establecer UserDetailsService con el bean SecurityFilterChain
+```java
+@Configuration
+public class ProjectConfig {
+    @Bean
+    public SecurityFilterChain configure(HttpSecurity http)
+            throws Exception {
+        http.httpBasic(Customizer.withDefaults());
+        http.authorizeHttpRequests(
+                c -> c.anyRequest().authenticated()
+        );
+        var user = User.withUsername("john") //Define un usuario con todos sus detalles
+                .password("12345")
+                .authorities("read")
+                .build();
+        var userDetailsService =  //Declara un UserDetailsService para almacenar los usuarios en 
+                // memoria y agrega el usuario para que sea gestionado por nuestro UserDetailsService.
+                new InMemoryUserDetailsManager(user);
+        http.userDetailsService(userDetailsService);//El UserDetailsService ahora se configura 
+                                                    // utilizando el bean SecurityFilterChain.
+        return http.build();
+    }
+    //Ommited code
+}
+```
+Puedes observar que declaramos el UserDetailsService de la misma manera que en el listado 2.5. La 
+diferencia es que ahora esto se hace localmente dentro del método del bean que crea el 
+`SecurityFilterChain`. También llamamos al método `userDetailsService()` desde `HttpSecurity` para 
+registrar la instancia de `UserDetailsService`. El siguiente listado muestra el contenido completo de 
+la clase de configuración.
+
+Definición completa de la clase de configuración:
+```java
+@Configuration
+public class ProjectConfig {
+    @Bean
+    SecurityFilterChain configure(HttpSecurity http)
+        throws Exception {
+        http.httpBasic(Customizer.withDefaults());
+        http.authorizeHttpRequests(
+            c -> c.anyRequest().authenticated()
+        );
+        //Creates a new user
+        var user = User.withUsername("john")
+            .password("12345")
+            .authorities("read")
+            .build();
+        //Agrega el usuario para que sea gestionado por nuestro UserDetailsService.
+        var userDetailsService = new InMemoryUserDetailsManager(user);
+        //Configures UserDetailsService
+        http.userDetailsService(userDetailsService);
+        return http.build();
+    }
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
+    }
+}
+```
+
+Cualquiera de estas opciones de configuración es correcta. La primera opción, en la que agregamos 
+los beans al contexto, te permite inyectar esos valores en otra clase donde podrías necesitarlos. 
+Pero si no necesitas eso para tu caso, la segunda opción sería igualmente válida.
+
+### 2.3.4 Definir lógica de autenticación personalizada
+Como ya has observado, los componentes de Spring Security ofrecen mucha flexibilidad, brindando 
+numerosas opciones para adaptarlos a la arquitectura de nuestras aplicaciones. Hasta ahora, has 
+aprendido el propósito de UserDetailsService y PasswordEncoder en la arquitectura de Spring Security,
+y también has visto varias formas de configurarlos.
+
+Ahora es momento de aprender cómo personalizar también el componente que delega en estos: 
+AuthenticationProvider, como se muestra en la figura 2.3. AuthenticationProvider implementa la lógica
+de autenticación y delega en UserDetailsService y PasswordEncoder para la gestión de usuarios y 
+contraseñas. Por tanto, podríamos decir que con esta sección profundizamos un paso más en la 
+arquitectura de autenticación para aprender cómo implementar una lógica de autenticación 
+personalizada con AuthenticationProvider.
+
+Dado que este es el primer ejemplo, solo se muestra una visión general para que entiendas mejor la 
+relación entre los componentes en la arquitectura. Sin embargo, se entrará en más detalle en los 
+capítulos 3 al 6.
+
+Se recomienda considerar las responsabilidades tal como están diseñadas en la arquitectura de Spring
+Security. Esta arquitectura está débilmente acoplada y con responsabilidades bien definidas, lo cual 
+es uno de los factores que hacen que Spring Security sea flexible y fácil de integrar con tus 
+aplicaciones. Dependiendo de cómo aproveches su flexibilidad, también podrías modificar este diseño,
+aunque debes tener cuidado, ya que estos enfoques pueden complicar tu solución. Por ejemplo, podrías
+optar por sobrescribir el `AuthenticationProvider` predeterminado de tal forma que ya no necesites un 
+`UserDetailsService` ni un `PasswordEncoder`.
+
+Con esto en mente, se muestra cómo crear un proveedor de autenticación personalizado. 
+Puedes encontrar este ejemplo en el proyecto ssia-ch2-ex4.
+
+1. La peticion es interceptado por el `Authentication filter`.
+2. La responsabilidad de la autenticacion es delegada por el `Authentication manager`.
+3. El `Authentication manager` usa el `Authentication provider`, el cual implementa la logica de 
+autenticacion.
+4. `El Authentication provider` encuentra el usuario con el `user details service` y valida el password 
+usando un codificador de contraseña.
+5. El resultado de la autenticacion es retornado por el filter.
+6. Los detalles sobre la entidad autenticada se almacenan en el contexto de seguridad.
+
+El `AuthenticationProvider` implementa la lógica de autenticación. Recibe la solicitud del 
+`AuthenticationManager` y delega la búsqueda del usuario a un `UserDetailsService`, y la verificación
+de la contraseña a un `PasswordEncoder`.
+
+Implementar la interfaz AuthenticationProvider:
+```java
+@Component
+public class CustomAuthenticationProvider implements AuthenticationProvider {
+    @Override
+    public Authentication authenticate (Authentication authentication) throws
+        AuthenticationException {
+        // authentication logic here
+    }
+    @Override
+    public boolean supports(Class<?> authenticationType) {
+        // type of the Authentication implementation here
+    }
+}
+```
+El método authenticate(Authentication authentication) representa toda la lógica de autenticación, 
+por lo que agregaremos una implementación. Explicaré el uso del método supports() en detalle en el 
+capítulo 6. Por ahora, recomiendo que aceptes su implementación como válida. No es esencial para el 
+ejemplo actual.
+
+Implementar la lógica de autenticación:
+```java
+@Override
+public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+    //El metodo getName() es heredado por Authentication desde la interfaz Principal.
+    String username = authentication.getName();
+    String password = String.valueOf(authentication.getCredentials());
+    //Esta condición generalmente llama a UserDetailsService y PasswordEncoder para probar el nombre
+    // de usuario y la contraseña.
+    if ("john".equals(username) && "12345".equals(password)) {
+        return new UsernamePasswordAuthenticationToken(username, password, Arrays.asList());
+    } else {
+        throw new AuthenticationCredentialsNotFoundException("Error!");
+    }
+}
+```
+
+Aquí, la condición de la cláusula if-else está reemplazando las responsabilidades de 
+`UserDetailsService` y `PasswordEncoder`. No es obligatorio usar estos dos beans, pero si trabajas con 
+usuarios y contraseñas para la autenticación, te recomiendo encarecidamente separar la lógica de su 
+gestión. Aplícala tal como fue diseñada en la arquitectura de Spring Security, incluso cuando 
+sobrescribas la implementación de autenticación.
+
+Puede ser útil reemplazar la lógica de autenticación implementando tu propio `AuthenticationProvider`.
+Si la implementación predeterminada no se ajusta completamente a los requisitos de tu aplicación, 
+puedes decidir implementar una lógica de autenticación personalizada. La implementación completa de 
+`AuthenticationProvider` es como la del siguiente listado.
+
+La implementación completa del proveedor de autenticación:
+```java
+@Component
+public class CustomAuthenticationProvider implements AuthenticationProvider {
+    @Override
+    public Authentication authenticate(Authentication authentication) 
+            throws AuthenticationException {
+        String username = authentication.getName();
+        String password = String.valueOf(authentication.getCredentials());
+        if ("john".equals(username) && "12345".equals(password)) {
+            return new UsernamePasswordAuthenticationToken(username, password, Arrays.asList());
+        } else {
+            throw new AuthenticationCredentialsNotFoundException("Error!");
+        }
+    }
+    @Override
+    public boolean supports(Class<?> authenticationType) {
+        return UsernamePasswordAuthenticationToken.class.isAssignableFrom(authenticationType);
+    }
+}
+```
+
+En la clase de configuración, puedes registrar el `AuthenticationProvider` utilizando el método 
+`authenticationProvider()` de `HttpSecurity` que se muestra en el siguiente listado.
+
+Registrar la nueva implementación de AuthenticationProvider:
+```java
+@Configuration
+public class ProjectConfig {
+    private final CustomAuthenticationProvider authenticationProvider;
+    public ProjectConfig(CustomAuthenticationProvider authenticationProvider) {
+        this.authenticationProvider = authenticationProvider;
+    }
+    @Bean
+    SecurityFilterChain configure(HttpSecurity http) throws Exception {
+        http.httpBasic(Customizer.withDefaults());
+        http.authenticationProvider(authenticationProvider);
+        http.authorizeHttpRequests(c -> c.anyRequest().authenticated()
+        );
+        return http.build();
+    }
+}
+```
+
+Ahora puedes llamar al endpoint, que es accesible únicamente para el usuario reconocido, definido 
+por la lógica de autenticación: john, con la contraseña 12345:
+
+curl -u john:12345 http://localhost:8080/hello
+
+La respuesta será:
+
+Hello!
+
+En el capítulo 6 aprenderás más sobre `AuthenticationProvider` y cómo sobrescribir su comportamiento 
+en el proceso de autenticación. En ese mismo capítulo también se analizará la interfaz Authentication 
+y sus implementaciones, como `UsernamePasswordAuthenticationToken`.
+
+### 2.3.5 Usar múltiples clases de configuración
+En los ejemplos implementados anteriormente, solo usamos una clase de configuración. Sin embargo, es
+una buena práctica separar las responsabilidades incluso para las clases de configuración. Necesitamos
+esta separación porque la configuración empieza a volverse más compleja. En una aplicación lista para
+producción, probablemente tengas más declaraciones que en nuestros primeros ejemplos. También puede 
+ser útil tener más de una clase de configuración para hacer el proyecto más legible.
+
+Siempre es buena práctica tener una sola clase por responsabilidad. Para este ejemplo, podemos 
+separar la configuración de gestión de usuarios de la configuración de autorización. Hacemos esto 
+definiendo dos clases de configuración: UserManagementConfig (definida en la siguiente lista) y 
+`WebAuthorizationConfig` (definida en el listado 2.16). Puedes encontrar este ejemplo en el proyecto 
+ssia-ch2-ex5.
+
+Definir la clase de configuración para la gestión de usuarios y contraseñas:
+```java
+@Configuration
+public class UserManagementConfig {
+    @Bean
+    public UserDetailsService userDetailsService() {
+        var userDetailsService = new InMemoryUserDetailsManager();
+        var user = User.withUsername("john")
+            .password("12345")
+            .authorities("read")
+            .build();
+        userDetailsService.createUser(user);
+        return userDetailsService;
+    }
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return NoOpPasswordEncoder.getInstance();
+    }
+}
+```
+En este caso, la clase `UserManagementConfig` contiene únicamente los dos beans responsables de la 
+gestión de usuarios: `UserDetailsService` y `PasswordEncoder`. El siguiente listado muestra esta 
+definición.
+
+Definir la clase de configuración para la gestión de autorización:
+```java
+@Configuration
+public class WebAuthorizationConfig {
+    @Bean
+    SecurityFilterChain configure(HttpSecurity http) throws Exception {
+        http.httpBasic(Customizer.withDefaults());
+        http.authorizeHttpRequests(c -> c.anyRequest().authenticated()
+        );
+        return http.build();
+    }
+}
+```
+En este caso, la clase `WebAuthorizationConfig` necesita definir un bean de tipo `SecurityFilterChain` 
+para configurar las reglas de autenticación y autorización.
+
+Resumen
+- Spring Boot proporciona configuraciones predeterminadas cuando se añade Spring Security a las 
+dependencias de la aplicación.
+- Implementas los siguientes componentes básicos para autenticación y autorización: 
+`UserDetailsService`, `PasswordEncoder` y `AuthenticationProvider`.
+- Puedes definir usuarios con la clase User. Un usuario debe tener al menos un nombre de usuario, 
+una contraseña y una autoridad. Las autoridades son acciones que permites a un usuario realizar en 
+el contexto de la aplicación.
+- Una implementación sencilla de `UserDetailsService` que proporciona Spring Security es 
+`InMemoryUserDetailsManager`. Puedes añadir usuarios a esta instancia de `UserDetailsService` para 
+gestionarlos en la memoria de la aplicación.
+- `NoOpPasswordEncoder` es una implementación del contrato `PasswordEncoder` que utiliza contraseñas en 
+texto claro. Esta implementación es útil para ejemplos de aprendizaje y (quizás) pruebas de concepto,
+pero no para aplicaciones listas para producción.
+- Puedes usar el contrato `AuthenticationProvider` para implementar lógica de autenticación 
+personalizada en la aplicación.
+- Hay varias formas de escribir configuraciones, pero en una sola aplicación debes elegir y mantener
+un enfoque. Esto ayuda a que el código sea más limpio y fácil de entender.
