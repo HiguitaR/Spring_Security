@@ -21,9 +21,7 @@ defecto. Continuamos con una comprensión profunda de estos `beans` y formas de 
 que en esta sección analizaremos el `PasswordEncoder`. Recuerda dónde encaja el `PasswordEncoder` 
 en el proceso de autenticación con el siguiente flujo.
 
-#### Flujo
-
-`Request User`-->`AuthenticationFilter`(Security context)<-->`AuthenticationManager`<-(1)->`AuthenticationProvider`(2){(`userDetailsService`)y(`passwordEncoder`)}
+![passwor encoder](images/chapter4/figure4.1.png)
 
 1. El `AuthenticationProvider` implementa la lógica de autenticación. Necesita el `PasswordEncoder` 
 para validar la contraseña del usuario.
@@ -270,7 +268,7 @@ implementaciones de `PasswordEncoder` almacenadas en un mapa. A `NoOpPasswordEnc
 la operación se delega a `NoOpPasswordEncoder`. Si el prefijo es `{bcrypt}`, se delega a 
 `BCryptPasswordEncoder`.
 
-(1)`{noop}abcde`(2)-->`DelegatingPasswordEncider`(3)-->`NoOpPasswordEncoder` (4){`BCryptPasswordEncoder` o `SCryptPassworEncoder`}
+![delegating password](images/chapter4/figure4.3.png)
 
 1. Llamada al método `matches()` para una contraseña que tiene el prefijo `{noop}`
 2. Cuando llamas al método `matches()` con una contraseña que tiene el prefijo `{noop}`, la llamada 
@@ -284,6 +282,13 @@ contraseñas con prefijo `{noop}`, un `BCryptPasswordEncoder` para aquellas que 
 y un `SCryptPasswordEncoder` para contraseñas que empiezan con `{scrypt}`. Cuando una contraseña 
 incluye el prefijo `{noop}`, `DelegatingPasswordEncoder` dirige la tarea a la versión de 
 `NoOpPasswordEncoder`.
+
+![flujo delegating](images/chapter4/figure4.4.png)
+
+Aquí, el `DelegatingPasswordEncoder` asigna la tarea de manejar contraseñas con prefijo `{noop}` al 
+`NoOpPasswordEncoder`, contraseñas con prefijo `{bcrypt}` al `BCryptPasswordEncoder`, y contraseñas
+con prefijo `{scrypt} al SCryptPasswordEncoder`. Si una contraseña lleva el prefijo `{bcrypt}`, el
+`DelegatingPasswordEncoder` deriva el proceso al mecanismo del `BCryptPasswordEncoder`.
 
 A continuación, veamos cómo definir un `DelegatingPasswordEncoder`. Comienzas creando una colección 
 de instancias de las implementaciones de `PasswordEncoder` que deseas utilizar, y las agrupas en un 

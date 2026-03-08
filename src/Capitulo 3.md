@@ -93,6 +93,8 @@ del flujo que suelo denominar "la parte de gestión de usuarios". En este capít
 `UserDetailsService` y `PasswordEncoder` son los componentes que interactúan directamente con los 
 detalles del usuario y sus credenciales. Analizaremos `PasswordEncoder` en detalle en el capítulo 4.
 
+![spring security](images/chapter3/figure3.1.png)
+
 1. El `Authentication filter` captura la peticion entrante
 2. La responsabilidad del autenticador es pasarlo al `Authentication Manager`
 3. El `Authentication Manager` involucra al `Authetication provider` para llevar a cabo los 
@@ -128,11 +130,7 @@ mediante la interfaz GrantedAuthority. A menudo llamamos a estos privilegios aut
 usuario tiene uno o más de ellos. En la figura 3.2 se muestra una representación de la relación 
 entre los componentes de la parte de gestión de usuarios del flujo de autenticación.
 
-#### Flujo: 
-
-`UserDetailsService`(1)---->`UserDetails`(2)o-----`GrantedAuthority`
-
-`UserDetailsManager`(3)---->`UserDetailsService`
+![flujo authentication](images/chapter3/figure3.2.png)
 
 1. El UserDetailsService utiliza el contrato de UserDetails
 2. Un UserDatails tiene 1 o mas autoridades
@@ -611,9 +609,7 @@ directamente del tipo `AuthenticationException`, que es la clase base de todas l
 relacionadas con el proceso de autenticación. `AuthenticationException`, a su vez, hereda de la 
 clase `RuntimeException`.
 
-#### Flujo de la Autenticacion
-
-`AutheticationProvicer`(1) --> `UserDetailsService``loadUserByUsername(String username)`(2)
+![user details service](images/chapter3/figure3.3.png)
 
 1. El AuthenticationProvider utiliza el UserDetailsService para cargar los detalles del usuario en 
 la lógica de autenticación. 
@@ -797,6 +793,8 @@ Para entender cómo funciona `JdbcUserDetailsManager`, lo mejor es verlo en acci
 En el siguiente ejemplo, se implementa una aplicación que gestiona usuarios en una base de datos 
 MySQL utilizando `JdbcUserDetailsManager`. Se muestra el lugar que ocupa esta implementación en el 
 flujo de autenticación. 
+
+![usando jdbc manager](images/chapter3/figure3.4.png)
 
 1. El filtro de autenticación intercepta la solicitud enviada por el cliente.
 2. La responsabilidad de autenticación se delega al administrador de autenticación.

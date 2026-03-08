@@ -23,9 +23,9 @@ tecnología. Será una combinación de entender el «por qué» y dominar el «c
 período de tiempo.
 
 Este capítulo cubre
-¡ Qué es Spring Security y qué puedes resolver utilizando esta herramienta
-¡ Qué es la seguridad para una aplicación de software
-¡ Por qué la seguridad del software es esencial y por qué deberías preocuparte
+- Qué es Spring Security y qué puedes resolver utilizando esta herramienta
+- Qué es la seguridad para una aplicación de software
+- Por qué la seguridad del software es esencial y por qué deberías preocuparte
 
 Los desarrolladores han tomado cada vez más conciencia sobre la necesidad de software seguro y han 
 asumido responsabilidad sobre la seguridad desde el inicio del desarrollo. Generalmente, como 
@@ -43,6 +43,8 @@ estas consideraciones puede provocar fallos en otros sistemas (por ejemplo, al p
 involuntariamente en un ataque de denegación de servicio distribuido [DDoS]). Los aspectos ocultos 
 de los requisitos no funcionales (el hecho de que sea mucho más difícil detectar si algo falta o está 
 incompleto) los convierten en aún más peligrosos.
+!
+[hacker](images/chapter1/figure1.1.png)
 
 Existen múltiples aspectos no funcionales a considerar al trabajar en un sistema de software. En la 
 práctica, todos ellos son importantes y deben abordarse responsablemente durante el proceso de 
@@ -185,7 +187,7 @@ solo las personas autorizadas puedan acceder, modificar o transmitirla. En esenc
 software garantiza la confidencialidad, integridad y disponibilidad de la información, asegurando 
 que no sea vulnerada en reposo ni en tránsito.
 
-NOTA El RGPD generó gran impacto a nivel mundial tras su introducción en 2018. En general, representa 
+`NOTA` El RGPD generó gran impacto a nivel mundial tras su introducción en 2018. En general, representa 
 un conjunto de leyes europeas relacionadas con la protección de datos que otorgan a las personas 
 mayor control sobre su información privada. El RGPD se aplica a los responsables de sistemas que 
 tengan usuarios en Europa. Los propietarios de tales aplicaciones arriesgan sanciones significativas 
@@ -197,6 +199,8 @@ los recursos gestionados por la aplicación. Cuanto mejor protejas cada capa, me
 probabilidad de que una persona con intenciones maliciosas acceda a los datos o realice operaciones 
 no autorizadas.
 
+![capas seguridad](images/chapter1/figure1.2.png)
+
 La seguridad es un tema complejo. En el caso de un sistema de software, la seguridad no existe 
 únicamente a nivel de aplicación. Por ejemplo, en lo que respecta a la red, existen problemas que 
 deben considerarse y prácticas específicas que deben aplicarse, mientras que en el almacenamiento, 
@@ -204,6 +208,8 @@ es otra discusión completamente distinta. De igual forma, hay una filosofía di
 despliegue, y así sucesivamente. Spring Security es un framework que pertenece a la seguridad a nivel 
 de aplicación. En esta sección, obtendrás una visión general de este nivel de seguridad y sus 
 implicaciones.
+
+![tabla capas](images/chapter1/figure1.3.png)
 
 La seguridad a nivel de aplicación (figura 1.3) se refiere a todo lo que una aplicación debe hacer 
 para proteger el entorno en el que se ejecuta, así como los datos que procesa y almacena. Y no se 
@@ -214,7 +220,7 @@ desplegamos un sistema como se muestra en la figura 1.4. Esta situación es com�
 diseñado con una arquitectura de microservicios, especialmente si se despliega en múltiples zonas de 
 disponibilidad en la nube.
 
-NOTA Si estás interesado en implementar aplicaciones Spring eficientes orientadas al cloud, recomiendo
+`NOTA` Si estás interesado en implementar aplicaciones Spring eficientes orientadas al cloud, recomiendo
 encarecidamente Cloud Native Spring in Action de Thomas Vitale (Manning, 2022). En este libro, el 
 autor se centra en todos los aspectos necesarios que un profesional debe conocer para desarrollar 
 aplicaciones Spring de alta calidad destinadas a despliegues en la nube.
@@ -226,6 +232,8 @@ de una de las capas, la mejor práctica es asumir que la capa superior no existe
 con el castillo de la figura 1.2. Si gestionas la capa con 30 soldados, quieres prepararlos para ser 
 lo más fuertes posible, y lo haces a pesar de saber que, para llegar a ellos, alguien primero tendría
 que cruzar el puente llameante.
+
+![arquitectura microservices](images/chapter1/figure1.4.png)
 
 Con esto en mente, consideremos que un individuo con intenciones maliciosas podría iniciar sesión en 
 la máquina virtual (VM) que aloja la primera aplicación. Supongamos también que la segunda aplicación 

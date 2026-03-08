@@ -93,6 +93,8 @@ suficiente para que aprendas los primeros pasos al desarrollar una aplicación c
 Spring Boot. Presenta los conceptos básicos de la arquitectura de Spring Security para autenticación 
 y autorización.
 
+![conexion Http](images/chapter2/figure2.1.png)
+
 Aprendemos Spring Security creando un proyecto vacío y nombrándolo ssia-ch2-ex1. (Este ejemplo 
 también se encuentra con el mismo nombre en otros proyectos proporcionados.) Las únicas dependencias
 que necesitas incluir para nuestro primer proyecto son spring-boot-starter-web y 
@@ -240,6 +242,8 @@ actores (componentes) en la arquitectura de Spring Security y las relaciones ent
 componentes tienen una implementación preconfigurada en el primer proyecto. En este capítulo, 
 demostraré qué configura Spring Boot en tu aplicación en términos de Spring Security y también 
 analizaremos las relaciones entre las entidades que forman parte del flujo de autenticación.
+
+![flujo del request](images/chapter2/figure2.2.png)
 
 1. El authentication filter captura la peticion `"request"`
 2. El authentication manager asume la responsabilidad del authentication
@@ -856,6 +860,8 @@ optar por sobrescribir el `AuthenticationProvider` predeterminado de tal forma q
 
 Con esto en mente, se muestra cómo crear un proveedor de autenticación personalizado. 
 Puedes encontrar este ejemplo en el proyecto ssia-ch2-ex4.
+
+![logica authentication](images/chapter2/figure2.3.png)
 
 1. La peticion es interceptado por el `Authentication filter`.
 2. La responsabilidad de la autenticacion es delegada por el `Authentication manager`.
