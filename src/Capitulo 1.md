@@ -43,8 +43,8 @@ estas consideraciones puede provocar fallos en otros sistemas (por ejemplo, al p
 involuntariamente en un ataque de denegación de servicio distribuido [DDoS]). Los aspectos ocultos 
 de los requisitos no funcionales (el hecho de que sea mucho más difícil detectar si algo falta o está 
 incompleto) los convierten en aún más peligrosos.
-!
-[hacker](images/chapter1/figure1.1.png)
+
+![hacker](images/chapter1/figure1.1.png)
 
 Existen múltiples aspectos no funcionales a considerar al trabajar en un sistema de software. En la 
 práctica, todos ellos son importantes y deben abordarse responsablemente durante el proceso de 
