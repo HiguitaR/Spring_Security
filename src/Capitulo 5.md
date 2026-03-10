@@ -357,3 +357,295 @@ INFO 5876 --- [nio-8080-exec-2]
 [CA]c.l.s.f.AuthenticationLoggingFilter: 
 [CA]Successful authenticated request with id 12345
 
+Añadir un filtro en la ubicación de otro en la cadena
+Esta sección trata sobre la adición de un filtro en la ubicación de otro en la cadena de filtros.
+Este enfoque puede utilizarse especialmente cuando se proporciona una implementación diferente para
+una responsabilidad que ya es asumida por uno de los filtros conocidos por Spring Security. Un 
+escenario típico es la autenticación.
+Supongamos que, en lugar del flujo de autenticación HTTP Basic, deseas implementar algo diferente. 
+En lugar de usar un nombre de usuario y una contraseña como credenciales de entrada en función de 
+las cuales la aplicación autentica al usuario, necesitas aplicar otro enfoque. Algunos ejemplos de
+escenarios que podrías encontrar son:
+
+- Identificación basada en un valor estático de cabecera para autenticación
+- Uso de una clave simétrica para firmar la solicitud con fines de autenticación
+- Uso de una contraseña de un solo uso (OTP) en el proceso de autenticación 
+
+En nuestro primer escenario (identificación basada en una clave estática para autenticación), el 
+cliente envía una cadena de texto a la aplicación en la cabecera de la solicitud HTTP, que siempre
+es la misma. La aplicación almacena estos valores en algún lugar, muy probablemente en una base de 
+datos o en un almacén de secretos. A partir de este valor estático, la aplicación identifica al 
+cliente.
+Este enfoque (figura 5.9) ofrece una seguridad débil en cuanto a autenticación, pero arquitectos 
+y desarrolladores a menudo lo eligen en llamadas entre aplicaciones backend por su simplicidad. 
+Las implementaciones también se ejecutan rápidamente porque no necesitan realizar cálculos 
+complejos, como en el caso de aplicar una firma criptográfica. De esta manera, las claves estáticas
+utilizadas para autenticación representan un compromiso en el que los desarrolladores confían más 
+en el nivel de infraestructura en términos de seguridad y, al mismo tiempo, no dejan los puntos 
+finales completamente desprotegidos.
+
+![response200](images/chapter5/figure5.9.png)
+
+La solicitud contiene una cabecera con el valor de la clave estática. Si este valor coincide con el
+conocido por la aplicación, esta acepta la solicitud.
+
+![other response200](images/chapter5/figure5.10.png)
+
+El encabezado Authorization contiene un valor cifrado con una clave compartida entre el cliente y 
+el servidor (o cifrado con una clave privada para la cual el servidor posee la clave pública 
+correspondiente).
+Si la aplicación verifica que la firma es válida, permite que la solicitud continúe.
+
+Finalmente, para nuestro tercer escenario, usar una contraseña de un solo uso (OTP) en el proceso 
+de autenticación, el usuario recibe la OTP mediante un mensaje o utilizando una aplicación de 
+proveedor de autenticación como Google Authenticator. 
+
+Finalmente, para nuestro tercer escenario, usar una contraseña de un solo uso (OTP) en el proceso 
+de autenticación, el usuario recibe la OTP mediante un mensaje o utilizando una aplicación de 
+proveedor de autenticación como Google Authenticator. 
+
+![add OTP](images/chapter5/figure5.11.png)
+
+Para acceder al recurso, el cliente debe utilizar una contraseña de un solo uso (OTP). Esta OTP se 
+obtiene de un servidor de autenticación externo. Por lo general, las aplicaciones emplean este 
+método en procesos de inicio de sesión que requieren autenticación multifactor.
+
+Implementemos un ejemplo para demostrar cómo aplicar un filtro personalizado. Para mantener el caso 
+relevante pero sencillo, nos enfocamos en la configuración y consideramos una lógica simple para 
+la autenticación. En nuestro escenario, tenemos el valor de una clave estática, que es el mismo 
+para todas las solicitudes. Para ser autenticado, el usuario debe agregar el valor correcto de la
+clave estática en el encabezado Authorization, como se muestra en la figura 5.12. Puede encontrar 
+el código de este ejemplo en el proyecto ssia-ch5-ex2.
+
+![custom filter](images/chapter5/figure5.12.png)
+
+Comenzamos implementando la clase del filtro, denominada `StaticKeyAuthenticationFilter`. Esta 
+clase lee el valor de la clave estática desde el archivo de propiedades y verifica si el valor del 
+encabezado Authorization es igual a este. Si los valores coinciden, el filtro reenvía la solicitud 
+al siguiente componente en la cadena de filtros.
+Si no coinciden, el filtro establece el valor 401 Unauthorized en el estado HTTP de la respuesta 
+sin reenviar la solicitud en la cadena de filtros. La siguiente lista define la clase 
+`StaticKeyAuthenticationFilter`.
+
+La definición de la clase `StaticKeyAuthenticationFilter` es la implementación de un filtro 
+personalizado en Spring Security que se encarga de autenticar las solicitudes mediante una clave 
+estática. Este filtro lee el valor esperado de la clave desde un archivo de configuración, lo 
+compara con el valor proporcionado en el encabezado Authorization de la solicitud HTTP, y si 
+coinciden, permite que la solicitud continúe en la cadena de filtros. En caso contrario, devuelve
+un estado `HTTP 401 (Unauthorized)` sin avanzar en la cadena.
+
+La definición de la clase `StaticKeyAuthenticationFilter`:
+```java
+//Para permitirnos inyectar valores desde el archivo de propiedades, se agrega una instancia de 
+// la clase en el contexto de Spring.
+@Component
+public class StaticKeyAuthenticationFilter
+    //Define la lógica de autenticación implementando la interfaz Filter y sobrescribiendo el 
+        // metodo doFilter().
+implements Filter {
+    //Obtiene el valor de la clave estática desde el archivo de propiedades utilizando la 
+    // anotación @Value.
+    @Value("${authorization.key}")
+    private String authorizationKey;//Obtiene el valor del encabezado Authorization de la solicitud 
+    // para compararlo con la clave estática.
+
+    @Override
+    public void doFilter(ServletRequest request,
+                         ServletResponse response,
+                         FilterChain filterChain)
+            throws IOException, ServletException {
+        var httpRequest = (HttpServletRequest) request;
+        var httpResponse = (HttpServletResponse) response;
+        String authentication =
+                httpRequest.getHeader("Authorization");
+        if (authorizationKey.equals(authentication)) {
+            filterChain.doFilter(request, response);
+        } else {
+            httpResponse.setStatus(
+                    HttpServletResponse.SC_UNAUTHORIZED);
+        }
+    }
+}
+```
+Una vez que definimos el filtro, lo agregamos a la cadena de filtros en la posición de la clase 
+`BasicAuthenticationFilter` utilizando el método `addFilterAt()`.
+
+![request and response](images/chapter5/figure5.13.png)
+
+Agregamos nuestro filtro de autenticación personalizado en la ubicación donde se habría colocado la
+clase `BasicAuthenticationFilter` si estuviéramos utilizando la autenticación HTTP Basic. Esto 
+significa que nuestro filtro personalizado tiene el mismo valor de orden.
+
+Pero recuerda lo que discutimos en la sección 5.1. Al agregar un filtro en una posición específica,
+Spring Security no asume que sea el único filtro en esa posición. Podrías agregar más filtros en 
+la misma ubicación de la cadena. En este caso, Spring Security no garantiza el orden en el que 
+actuarán. Repito esto porque he visto a muchas personas confundidas sobre cómo funciona. Algunos 
+desarrolladores piensan que cuando aplicas un filtro en la posición de uno conocido, este será 
+reemplazado. ¡Este no es el caso! Debemos asegurarnos de no agregar filtros que no necesitemos.
+
+`NOTA` Te aconsejo que no agregues múltiples filtros en la misma posición de la cadena.  Cuando 
+agregas más filtros en la misma ubicación, el orden en el que se utilizan no está definido. Tiene 
+sentido tener un orden definido en el que se llamen los filtros. Tener un orden conocido hace que 
+tu aplicación sea más fácil de entender y mantener.
+
+Puedes encontrar la definición de la clase de configuración que agrega el filtro. Observa que aquí 
+no llamamos al método `httpBasic()` de la clase `HttpSecurity` porque no queremos que la instancia
+de `BasicAuthenticationFilter` se agregue a la cadena de filtros.
+
+Agregar el filtro en la clase de configuración:
+```java
+@Configuration
+public class ProjectConfig {
+    //Inyecta la instancia del filtro desde el contexto de Spring
+    private final StaticKeyAuthenticationFilter filter;
+    // omitted constructor
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+            throws Exception {
+        //Agrega el filtro en la posición del filtro de autenticación básica en la cadena de filtros
+        http.addFilterAt(filter,
+                        BasicAuthenticationFilter.class)
+                .authorizeRequests(c -> c.anyRequest().permitAll());
+        return http.build();
+    }    
+}
+```
+Para probar la aplicación, también necesitamos un punto de acceso `(endpoint)`. Para ello, definimos 
+un controlador, como en el listado 5.4. Debes agregar un valor para la clave estática en el 
+servidor en el archivo application.properties, como se muestra en:
+
+`authorization.key=SD9cICjl1e`
+
+`NOTA` Nunca es una buena idea almacenar contraseñas, claves ni ningún otro dato que no deba ser 
+visto por todos en un archivo de propiedades para una aplicación en producción.  En nuestros 
+ejemplos, usamos este enfoque por simplicidad y para que puedas centrarte en las configuraciones 
+de Spring Security que realizamos. Pero en escenarios reales, asegúrate de usar un almacén de 
+secretos `(secrets vault)` para almacenar este tipo de información.
+
+Ya podemos probar la aplicación. Se espera que la aplicación permita las solicitudes que tengan el 
+valor correcto en la cabecera Authorization y rechace las demás, devolviendo un estado `HTTP 401 
+Unauthorized` en la respuesta. Los fragmentos de código siguientes muestran las llamadas curl 
+utilizadas para probar la aplicación. Si usas el mismo valor configurado en el servidor para la 
+cabecera Authorization, la llamada será exitosa y verás el cuerpo de la respuesta, Hello! La 
+llamada
+
+`curl -H "Authorization:SD9cICjl1e" http://localhost:8080/hello`
+
+devuelve este cuerpo de respuesta:
+
+Hello!
+
+Con la siguiente llamada, si la cabecera Authorization está ausente o es incorrecta, el estado de 
+la respuesta será `HTTP 401 Unauthorized`:
+
+`curl -v http://localhost:8080/hello`
+
+El estado de la respuesta es
+
+...
+`< HTTP/1.1 401`
+...
+
+En este caso, como no configuramos un UserDetailsService, Spring Boot lo configura automáticamente,
+como aprendiste en el capítulo 2. Pero en nuestro escenario, no necesitas un UserDetailsService en 
+absoluto porque el concepto de usuario no existe. Solo validamos que quien solicita acceder a un 
+punto de acceso en el servidor conozca un valor determinado. Los escenarios de aplicación 
+normalmente no son tan simples y a menudo requieren un UserDetailsService. Sin embargo, si prevés o
+tienes un caso en el que este componente no es necesario, puedes desactivar la autoconfiguración. 
+Para desactivar la configuración predeterminada de UserDetailsService, puedes usar el atributo 
+exclude de la anotación @SpringBootApplication en la clase principal:
+```java
+@SpringBootApplication
+(exclude = {UserDetailsServiceAutoConfiguration.class })
+```
+
+## 5.5 Implementaciones de filtros proporcionadas por Spring Security
+
+Esta sección analiza las clases proporcionadas por Spring Security que implementan la interfaz 
+Filter. En los ejemplos, definimos el filtro implementando esta interfaz directamente. Spring 
+Security ofrece algunas clases abstractas que implementan la interfaz Filter y que puedes extender 
+para tus definiciones de filtro. Estas clases también añaden funcionalidad de la cual se pueden 
+beneficiar tus implementaciones al extenderlas. Por ejemplo, puedes extender la clase 
+`GenericFilterBean`, que permite usar parámetros de inicialización que definirías en un archivo 
+descriptor `web.xml` cuando sea aplicable. Una clase más útil que extiende `GenericFilterBean` es 
+`OncePerRequestFilter`. Al agregar un filtro a la cadena, el framework no garantiza que se llame solo
+una vez por solicitud. `OncePerRequestFilter`, como su nombre indica, implementa una lógica para 
+asegurar que el método `doFilter()` del filtro se ejecute solo una vez por solicitud.
+
+Si necesitas dicha funcionalidad en tu aplicación, utiliza las clases que Spring proporciona. Sin 
+embargo, si no las necesitas, siempre recomiendo mantener las implementaciones lo más simples 
+posible. Con demasiada frecuencia he visto desarrolladores extender la clase GenericFilterBean en 
+lugar de implementar directamente la interfaz Filter, en funcionalidades que no requieren la lógica
+personalizada que añade `GenericFilterBean`. Cuando se les pregunta por qué, parece que no lo saben; 
+probablemente copiaron la implementación tal como la encontraron en ejemplos de la web.
+
+Para dejarlo completamente claro, veamos un ejemplo. La funcionalidad de registro (logging) que 
+implementamos en la sección 5.3 es un excelente candidato para usar `OncePerRequestFilter`. Queremos 
+evitar registrar la misma solicitud varias veces. Spring Security no garantiza que el filtro no se 
+llame más de una vez, por lo que debemos encargarnos de esto nosotros mismos. La forma más sencilla
+es implementar el filtro usando la clase `OncePerRequestFilter`. He escrito esto en un proyecto 
+separado llamado ssia-ch5-ex3.
+
+Encontrarás el cambio que hice en la clase `AuthenticationLoggingFilter`. En lugar
+de implementar directamente la interfaz Filter, como en el ejemplo de la sección 5.3, ahora 
+extiende la clase `OncePerRequestFilter`. El método que anulamos aquí es `doFilterInternal()`. Puedes 
+encontrar este código en el proyecto ssia-ch5-ex3.
+
+Extender la clase OncePerRequestFilter:
+```java
+public class AuthenticationLoggingFilter
+    //En lugar de implementar la interfaz Filter, extiende la clase OncePerRequestFilter.
+extends OncePerRequestFilter {
+private final Logger logger =
+Logger.getLogger(
+AuthenticationLoggingFilter.class.getName());
+    @Override
+    //Sobrescribe doFilterInternal(), que reemplaza la función del metodo doFilter() de la 
+    // interfaz Filter.
+    protected void doFilterInternal(
+            //La clase OncePerRequestFilter solo admite filtros HTTP. Es por eso que los parámetros
+            // se proporcionan directamente como HttpServletRequest y HttpServletResponse.
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain) throws
+            ServletException, IOException {
+        String requestId = request.getHeader("Request-Id");
+        logger.info("Successfully authenticated request with id " +
+                requestId);
+        filterChain.doFilter(request, response);
+    }
+}
+```
+Algunas observaciones breves sobre la clase `OncePerRequestFilter` que podrían serte útiles:
+
+- Solo admite solicitudes HTTP, pero en realidad esto es lo que siempre usamos. La ventaja es que 
+realiza la conversión de tipos automáticamente, y recibimos directamente las solicitudes como 
+HttpServletRequest y HttpServletResponse. Recuerda que, con la interfaz Filter, debíamos hacer la 
+conversión manualmente.
+
+- Puedes implementar lógica para decidir si el filtro se aplica o no. Aunque hayas agregado el 
+filtro a la cadena, puedes determinar que no se aplique a ciertas solicitudes. Esto se configura 
+sobrescribiendo el método `shouldNotFilter(HttpServletRequest)`. Por defecto, el filtro se aplica a 
+todas las solicitudes.
+
+- Por defecto, un `OncePerRequestFilter` no se aplica a solicitudes asíncronas ni a solicitudes de 
+despacho de errores. Puedes cambiar este comportamiento sobrescribiendo los métodos 
+`shouldNotFilterAsyncDispatch()` y `shouldNotFilterErrorDispatch()`.
+
+Si encuentras útil alguna de estas características del `OncePerRequestFilter` en tu implementación, 
+te recomiendo usar esta clase para definir tus filtros.
+
+Resumen
+
+- La primera capa de la arquitectura de una aplicación web, que intercepta las solicitudes HTTP, 
+es una cadena de filtros. Al igual que otros componentes de la arquitectura de Spring Security, 
+puedes personalizarla según tus necesidades.
+
+- Puedes personalizar la cadena de filtros añadiendo nuevos filtros antes, después o en la posición
+de un filtro existente.
+
+- Puedes tener múltiples filtros en la misma posición de un filtro existente. En ese caso, el orden
+en que se ejecutan no está definido.
+
+- Modificar la cadena de filtros te ayuda a personalizar la autenticación y autorización según los 
+requisitos de tu aplicación.
