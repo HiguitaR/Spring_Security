@@ -1,6 +1,6 @@
 # Parte 4
 
-## Implementación de OAuth 2 y OpenID Connect
+# Implementación de OAuth 2 y OpenID Connect
 
 En una era donde los métodos de autenticación seguros y fluidos son fundamentales, protocolos como 
 `OAuth 2 y OpenID` Connect se han consolidado como estándares del sector. Esta parte del libro 
